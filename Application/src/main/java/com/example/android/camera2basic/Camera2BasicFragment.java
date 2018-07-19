@@ -17,6 +17,7 @@
 package com.example.android.camera2basic;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -24,7 +25,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Point;
 import android.graphics.RectF;
@@ -36,12 +36,8 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
-import android.hardware.camera2.params.TonemapCurve;
-import android.media.Image;
-import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -53,20 +49,18 @@ import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CompoundButton;
-import android.widget.SeekBar;
+import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -225,6 +219,8 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
      */
     private int mSensorOrientation;
 
+    private ImageView mReticleView;
+
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
@@ -316,11 +312,66 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         ((Switch)view.findViewById(R.id.switch1)).setOnCheckedChangeListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+        mReticleView = view.findViewById(R.id.focus_reticle);
     }
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public void onStart() {
+        super.onStart();
+        if(mTextureView != null){
+            final GestureDetector gestureDetector = new GestureDetector(new GestureDetector.OnGestureListener() {
+                @Override
+                public boolean onDown(MotionEvent e) {
+                    return true;
+                }
+
+                @Override
+                public void onShowPress(MotionEvent e) {
+
+                }
+
+                @Override
+                public boolean onSingleTapUp(MotionEvent e) {
+                    return false;
+                }
+
+                @Override
+                public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                    int halfWidth = mReticleView.getWidth() / 2;
+                    mReticleView.setX(mTextureView.getX() + e2.getX() - halfWidth);
+                    mReticleView.setY(mTextureView.getY() + e2.getY() - halfWidth);
+                    return true;
+                }
+
+                @Override
+                public void onLongPress(MotionEvent e) {
+
+                }
+
+                @Override
+                public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                    return false;
+                }
+            });
+
+            mTextureView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    boolean result = gestureDetector.onTouchEvent(event);
+                    if(event.getAction() == MotionEvent.ACTION_UP){
+                        // TODO send position to the camera
+                        v.performClick();
+                    }
+                    return result;
+                }
+            });
+        }
     }
 
     @Override
@@ -611,13 +662,11 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
 
     @Override
     public void onCheckedChanged(CompoundButton buttonView, final boolean isChecked) {
-
         mBackgroundHandler.post(new Runnable() {
             @Override
             public void run() {
                 try {
                     // TODO: finish this
-
                     if (isChecked) mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
                     else mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
                     mPreviewRequest = mPreviewRequestBuilder.build();

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:name="focusPath"
+        android:pathData="M 32.5,15 L 20.1,15 L 20.1,18 L 32.5,18 L 32.5,15 ZM 20.1,18 L 8.8,18 L 8.8,26.5 L 5.7,26.5 L 5.7,15 L 20.1,15 L 20.1,18 ZM 5.7,30.2 L 8.8,30.2 L 8.8,26.5 L 5.7,26.5 L 5.7,30.2 ZM 67.6,15 L 80,15 L 80,18 L 67.6,18 L 67.6,15 ZM 80,18 L 91.3,18 L 91.3,26.5 L 94.4,26.5 L 94.4,15 L 80,15 L 80,18 ZM 94.4,30.2 L 91.3,30.2 L 91.3,26.5 L 94.4,26.5 L 94.4,30.2 ZM 32.5,85 L 20.1,85 L 20.1,82 L 32.5,82 L 32.5,85 ZM 20.1,82 L 8.8,82 L 8.8,73.5 L 5.7,73.5 L 5.7,85 L 20.1,85 L 20.1,82 ZM 5.7,69.8 L 8.8,69.8 L 8.8,73.5 L 5.7,73.5 L 5.7,69.8 ZM 67.6,85 L 80,85 L 80,82 L 67.6,82 L 67.6,85 ZM 80,82 L 91.3,82 L 91.3,73.5 L 94.4,73.5 L 94.4,85 L 80,85 L 80,82 ZM 94.4,69.8 L 91.3,69.8 L 91.3,73.5 L 94.4,73.5 L 94.4,69.8 Z"
+        android:fillColor="#F2F2F2"
+        android:fillAlpha="1.0" />
+</vector>

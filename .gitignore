@@ -1,0 +1,5 @@
+.idea/
+Application/build/
+.gradle/
+local.properties
+CONTRIB.md

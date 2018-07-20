@@ -27,6 +27,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Matrix;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -37,16 +38,20 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.GestureDetector;
@@ -104,8 +109,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
      * {@link TextureView}.
      */
-    private final TextureView.SurfaceTextureListener mSurfaceTextureListener
-            = new TextureView.SurfaceTextureListener() {
+    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
@@ -214,10 +218,16 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
 
-    /**
-     * Orientation of the camera sensor
-     */
     private int mSensorOrientation;
+    private Rect activeArraySize = null;
+
+    private boolean usingContinuousAF = false;
+
+
+    /**
+     * This is the scalar range that we can actually use with the reticle. We avoid the borders so the rectangle we send is always the same size.
+     */
+    private Range<Float> activeRange = new Range<>(0.1f,0.9f);
 
     private ImageView mReticleView;
 
@@ -266,8 +276,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
      * @param aspectRatio       The aspect ratio
      * @return The optimal {@code Size}, or an arbitrary one if none were big enough
      */
-    private static Size chooseOptimalSize(Size[] choices, int textureViewWidth,
-            int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
+    private static Size chooseOptimalSize(Size[] choices, int textureViewWidth, int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
 
         // Collect the supported resolutions that are at least as big as the preview Surface
         List<Size> bigEnough = new ArrayList<>();
@@ -311,7 +320,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         ((Switch)view.findViewById(R.id.switch1)).setOnCheckedChangeListener(this);
-        mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+        mTextureView = view.findViewById(R.id.texture);
         mReticleView = view.findViewById(R.id.focus_reticle);
     }
 
@@ -365,13 +374,97 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
                 public boolean onTouch(View v, MotionEvent event) {
                     boolean result = gestureDetector.onTouchEvent(event);
                     if(event.getAction() == MotionEvent.ACTION_UP){
-                        // TODO send position to the camera
+
+                        float x = event.getX() / v.getWidth();
+                        float y = event.getY() / v.getHeight();
+
+                        int displayRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+                        switch (displayRotation) {
+                            case Surface.ROTATION_0:
+                                float aux = x;
+                                x = y;
+                                y = 1 - aux;
+                                break;
+                            case Surface.ROTATION_270:
+                                x = 1 - x;
+                                y = 1 - y;
+                                break;
+                        }
+
+                        // we assume the device supports at least one metering area.
+                        final MeteringRectangle[] meteringAreas = new MeteringRectangle[1];
+
+                        x = activeRange.clamp(x);
+                        y = activeRange.clamp(y);
+
+                        RectF rect = new RectF(x - 0.1f, y - 0.1f, x + 0.1f, y + 0.1f);
+
+                        Log.d(TAG, "onTouch: " + x + ":" + y);
+
+                        meteringAreas[0] = convertRectToMeteringRectangle(rect, activeArraySize, 1000);
+
+                        mBackgroundHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    // here we update the metering areas and trigger the focus (if using Auto mode)
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, meteringAreas);
+
+                                    // here we trigger the focus if using Auto mode. Continuous mode triggers the AF automatically
+                                    if (usingContinuousAF) {
+                                        // we shouldn't need to update the AF Mode, but just in case
+                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+
+                                        //mPreviewRequest = mPreviewRequestBuilder.build();
+                                        //mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+
+                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+
+                                        mPreviewRequest = mPreviewRequestBuilder.build();
+                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+                                    }
+                                    else {
+                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
+                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
+
+                                        mPreviewRequest = mPreviewRequestBuilder.build();
+                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+
+                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
+
+
+                                        mPreviewRequest = mPreviewRequestBuilder.build();
+                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+                                    }
+                                } catch (CameraAccessException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+
+
                         v.performClick();
                     }
                     return result;
                 }
             });
         }
+    }
+
+    private static MeteringRectangle convertRectToMeteringRectangle(RectF rect, Rect activeArray, @IntRange(from=0,to=1000) int weight) {
+        // rect is of type [0, 0] - [1, 1] and we must convert it to [0, 0] - [sensor width-1, sensor height-1].
+
+        int left = (int)(rect.left * (activeArray.width()-1));
+        int right = (int)(rect.right * (activeArray.width()-1));
+        int top = (int)(rect.top * (activeArray.height()-1));
+        int bottom = (int)(rect.bottom * (activeArray.height()-1));
+
+        left = Math.min(left, activeArray.width()-1);
+        right = Math.min(right, activeArray.width()-1);
+        top = Math.min(top, activeArray.height()-1);
+        bottom = Math.min(bottom, activeArray.height()-1);
+
+        return new MeteringRectangle(new Rect(left, top, right, bottom), weight);
     }
 
     @Override
@@ -439,6 +532,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
                 StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
                 if (map == null) continue;
 
+                activeArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
                 // coordinate.
@@ -485,7 +579,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
                 // garbage capture data.
                 mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
                         rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
-                        maxPreviewHeight, new Size(4,3));
+                        maxPreviewHeight, new Size(16,9));
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 int orientation = getResources().getConfiguration().orientation;
@@ -514,6 +608,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
             requestCameraPermission();
             return;
         }
+
         setUpCameraOutputs(width, height);
         configureTransform(width, height);
         Activity activity = getActivity();
@@ -661,13 +756,16 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
 
 
     @Override
-    public void onCheckedChanged(CompoundButton buttonView, final boolean isChecked) {
+    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+        usingContinuousAF = isChecked;
         mBackgroundHandler.post(new Runnable() {
             @Override
             public void run() {
                 try {
-                    // TODO: finish this
-                    if (isChecked) mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+                    if (usingContinuousAF) {
+                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, null);
+                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+                    }
                     else mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
                     mPreviewRequest = mPreviewRequestBuilder.build();
                     mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);

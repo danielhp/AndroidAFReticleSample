@@ -763,7 +763,8 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
             public void run() {
                 try {
                     if (usingContinuousAF) {
-                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, null);
+                        //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, null);
+                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
                         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
                     }
                     else mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);

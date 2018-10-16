@@ -48,7 +48,6 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Range;
@@ -74,7 +73,7 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedChangeListener, ActivityCompat.OnRequestPermissionsResultCallback {
+public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
      * Conversion from screen rotation to JPEG orientation.
@@ -223,6 +222,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
 
     private boolean usingContinuousAF = false;
 
+    private boolean usingReticle = true;
 
     /**
      * This is the scalar range that we can actually use with the reticle. We avoid the borders so the rectangle we send is always the same size.
@@ -319,7 +319,43 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        ((Switch)view.findViewById(R.id.switch1)).setOnCheckedChangeListener(this);
+        ((Switch)view.findViewById(R.id.switch_continuous_focus_mode)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                usingContinuousAF = isChecked;
+                mBackgroundHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            if (usingContinuousAF) {
+                                //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, null);
+                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+                            }
+                            else mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
+                            mPreviewRequest = mPreviewRequestBuilder.build();
+                            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        });
+
+        ((Switch)view.findViewById(R.id.switch_focus_mode)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                usingReticle = isChecked
+                mReticleView.setVisibility(isChecked? View.VISIBLE: View.GONE);
+                mBackgroundHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        // ToDo change camera stuff
+                    }
+                });
+            }
+        });
         mTextureView = view.findViewById(R.id.texture);
         mReticleView = view.findViewById(R.id.focus_reticle);
     }
@@ -341,13 +377,14 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
                 }
 
                 @Override
-                public void onShowPress(MotionEvent e) {
-
-                }
+                public void onShowPress(MotionEvent e) {}
 
                 @Override
                 public boolean onSingleTapUp(MotionEvent e) {
-                    return false;
+                    int halfWidth = mReticleView.getWidth() / 2;
+                    mReticleView.setX(mTextureView.getX() + e.getX() - halfWidth);
+                    mReticleView.setY(mTextureView.getY() + e.getY() - halfWidth);
+                    return true;
                 }
 
                 @Override
@@ -359,9 +396,7 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
                 }
 
                 @Override
-                public void onLongPress(MotionEvent e) {
-
-                }
+                public void onLongPress(MotionEvent e) {}
 
                 @Override
                 public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
@@ -752,29 +787,6 @@ public class Camera2BasicFragment extends Fragment implements Switch.OnCheckedCh
             matrix.postRotate(180, centerX, centerY);
         }
         mTextureView.setTransform(matrix);
-    }
-
-
-    @Override
-    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-        usingContinuousAF = isChecked;
-        mBackgroundHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (usingContinuousAF) {
-                        //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, null);
-                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
-                    }
-                    else mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
-                    mPreviewRequest = mPreviewRequestBuilder.build();
-                    mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-                } catch (CameraAccessException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
     }
 
     /**

@@ -42,17 +42,30 @@
         />
     
     <Switch
-        android:id="@+id/switch1"
-        android:layout_width="250dp"
+        android:id="@+id/switch_continuous_focus_mode"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Use Continuous Video Mode"
         android:textColor="@android:color/white"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintLeft_toRightOf="@+id/switch_focus_mode"
         app:layout_constraintRight_toRightOf="parent"
         android:padding="2dp"
+        android:layout_marginBottom="10dp"/>
+
+    <Switch
+        android:id="@+id/switch_focus_mode"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Use Reticle"
+        android:textColor="@android:color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/switch_continuous_focus_mode"
+        android:padding="2dp"
         android:layout_marginBottom="10dp"
-        android:layout_marginLeft="10dp"/>
+        android:layout_marginRight="10dp"
+        android:checked="true"/>
 
 
 </android.support.constraint.ConstraintLayout>

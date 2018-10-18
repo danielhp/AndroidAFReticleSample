@@ -17,7 +17,6 @@
 package com.example.android.camera2basic;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -45,6 +44,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
+import android.support.constraint.ConstraintLayout;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
@@ -142,6 +142,11 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     private AutoFitTextureView mTextureView;
 
     /**
+     * An {@link AutoFitGLSurfaceView} for camera preview.
+     */
+    private AutoFitGLSurfaceView mGLSurfaceView;
+
+    /**
      * A {@link CameraCaptureSession } for camera preview.
      */
     private CameraCaptureSession mCaptureSession;
@@ -166,7 +171,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
             // This method is called when the camera is opened.  We start camera preview here.
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
-            createCameraPreviewSession();
+            createCameraPreviewSession(null);
         }
 
         @Override
@@ -223,6 +228,8 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     private boolean usingContinuousAF = false;
 
     private boolean usingReticle = true;
+
+    private boolean usingTextureView = true;
 
     /**
      * This is the scalar range that we can actually use with the reticle. We avoid the borders so the rectangle we send is always the same size.
@@ -288,7 +295,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
             if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
                     option.getHeight() == option.getWidth() * h / w) {
                 if (option.getWidth() >= textureViewWidth &&
-                    option.getHeight() >= textureViewHeight) {
+                        option.getHeight() >= textureViewHeight) {
                     bigEnough.add(option);
                 } else {
                     notBigEnough.add(option);
@@ -343,10 +350,18 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
             }
         });
 
+        ((Switch)view.findViewById(R.id.switch_surface_type)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                usingTextureView = !isChecked;
+                setSurfaceType();
+            }
+        });
+
         ((Switch)view.findViewById(R.id.switch_focus_mode)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                usingReticle = isChecked
+                usingReticle = isChecked;
                 mReticleView.setVisibility(isChecked? View.VISIBLE: View.GONE);
                 mBackgroundHandler.post(new Runnable() {
                     @Override
@@ -356,7 +371,8 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
                 });
             }
         });
-        mTextureView = view.findViewById(R.id.texture);
+
+//        mTextureView = view.findViewById(R.id.texture);
         mReticleView = view.findViewById(R.id.focus_reticle);
     }
 
@@ -365,124 +381,127 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
         super.onActivityCreated(savedInstanceState);
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    @Override
-    public void onStart() {
-        super.onStart();
-        if(mTextureView != null){
-            final GestureDetector gestureDetector = new GestureDetector(new GestureDetector.OnGestureListener() {
-                @Override
-                public boolean onDown(MotionEvent e) {
-                    return true;
-                }
+    private void setListeners(){
+        if( (usingTextureView && mTextureView == null) ||(!usingTextureView && mGLSurfaceView == null)) return;
 
-                @Override
-                public void onShowPress(MotionEvent e) {}
+        final float initX = usingTextureView ? mTextureView.getX() : mGLSurfaceView.getX();
+        final float initY = usingTextureView ? mTextureView.getY() : mGLSurfaceView.getY();
+        final GestureDetector gestureDetector = new GestureDetector(new GestureDetector.OnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
 
-                @Override
-                public boolean onSingleTapUp(MotionEvent e) {
-                    int halfWidth = mReticleView.getWidth() / 2;
-                    mReticleView.setX(mTextureView.getX() + e.getX() - halfWidth);
-                    mReticleView.setY(mTextureView.getY() + e.getY() - halfWidth);
-                    return true;
-                }
+            @Override
+            public void onShowPress(MotionEvent e) {}
 
-                @Override
-                public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-                    int halfWidth = mReticleView.getWidth() / 2;
-                    mReticleView.setX(mTextureView.getX() + e2.getX() - halfWidth);
-                    mReticleView.setY(mTextureView.getY() + e2.getY() - halfWidth);
-                    return true;
-                }
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                int halfWidth = mReticleView.getWidth() / 2;
+                mReticleView.setX(mTextureView.getX() + e.getX() - halfWidth);
+                mReticleView.setY(mTextureView.getY() + e.getY() - halfWidth);
+                return true;
+            }
 
-                @Override
-                public void onLongPress(MotionEvent e) {}
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                int halfWidth = mReticleView.getWidth() / 2;
+                mReticleView.setX(mTextureView.getX() + e2.getX() - halfWidth);
+                mReticleView.setY(mTextureView.getY() + e2.getY() - halfWidth);
+                return true;
+            }
 
-                @Override
-                public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                    return false;
-                }
-            });
+            @Override
+            public void onLongPress(MotionEvent e) {}
 
-            mTextureView.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    boolean result = gestureDetector.onTouchEvent(event);
-                    if(event.getAction() == MotionEvent.ACTION_UP){
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                return false;
+            }
+        });
 
-                        float x = event.getX() / v.getWidth();
-                        float y = event.getY() / v.getHeight();
+        View.OnTouchListener touchListener = new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                boolean result = gestureDetector.onTouchEvent(event);
+                if(event.getAction() == MotionEvent.ACTION_UP){
 
-                        int displayRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
-                        switch (displayRotation) {
-                            case Surface.ROTATION_0:
-                                float aux = x;
-                                x = y;
-                                y = 1 - aux;
-                                break;
-                            case Surface.ROTATION_270:
-                                x = 1 - x;
-                                y = 1 - y;
-                                break;
-                        }
+                    float x = event.getX() / v.getWidth();
+                    float y = event.getY() / v.getHeight();
 
-                        // we assume the device supports at least one metering area.
-                        final MeteringRectangle[] meteringAreas = new MeteringRectangle[1];
-
-                        x = activeRange.clamp(x);
-                        y = activeRange.clamp(y);
-
-                        RectF rect = new RectF(x - 0.1f, y - 0.1f, x + 0.1f, y + 0.1f);
-
-                        Log.d(TAG, "onTouch: " + x + ":" + y);
-
-                        meteringAreas[0] = convertRectToMeteringRectangle(rect, activeArraySize, 1000);
-
-                        mBackgroundHandler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                try {
-                                    // here we update the metering areas and trigger the focus (if using Auto mode)
-                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, meteringAreas);
-
-                                    // here we trigger the focus if using Auto mode. Continuous mode triggers the AF automatically
-                                    if (usingContinuousAF) {
-                                        // we shouldn't need to update the AF Mode, but just in case
-                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-
-                                        //mPreviewRequest = mPreviewRequestBuilder.build();
-                                        //mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-
-                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
-
-                                        mPreviewRequest = mPreviewRequestBuilder.build();
-                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-                                    }
-                                    else {
-                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
-                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
-
-                                        mPreviewRequest = mPreviewRequestBuilder.build();
-                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-
-                                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
-
-
-                                        mPreviewRequest = mPreviewRequestBuilder.build();
-                                        mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-                                    }
-                                } catch (CameraAccessException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        });
-
-
-                        v.performClick();
+                    int displayRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+                    switch (displayRotation) {
+                        case Surface.ROTATION_0:
+                            float aux = x;
+                            x = y;
+                            y = 1 - aux;
+                            break;
+                        case Surface.ROTATION_270:
+                            x = 1 - x;
+                            y = 1 - y;
+                            break;
                     }
-                    return result;
+
+                    // we assume the device supports at least one metering area.
+                    final MeteringRectangle[] meteringAreas = new MeteringRectangle[1];
+
+                    x = activeRange.clamp(x);
+                    y = activeRange.clamp(y);
+
+                    RectF rect = new RectF(x - 0.1f, y - 0.1f, x + 0.1f, y + 0.1f);
+
+                    Log.d(TAG, "onTouch: " + x + ":" + y);
+
+                    meteringAreas[0] = convertRectToMeteringRectangle(rect, activeArraySize, 1000);
+
+                    mBackgroundHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                // here we update the metering areas and trigger the focus (if using Auto mode)
+                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, meteringAreas);
+
+                                // here we trigger the focus if using Auto mode. Continuous mode triggers the AF automatically
+                                if (usingContinuousAF) {
+                                    // we shouldn't need to update the AF Mode, but just in case
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+
+                                    //mPreviewRequest = mPreviewRequestBuilder.build();
+                                    //mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+
+                                    mPreviewRequest = mPreviewRequestBuilder.build();
+                                    mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+                                }
+                                else {
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_AUTO);
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
+
+                                    mPreviewRequest = mPreviewRequestBuilder.build();
+                                    mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+
+                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
+
+
+                                    mPreviewRequest = mPreviewRequestBuilder.build();
+                                    mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+                                }
+                            } catch (CameraAccessException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                    v.performClick();
                 }
-            });
+                return result;
+            }
+        };
+
+        if(usingTextureView && mTextureView != null) {
+            mTextureView.setOnTouchListener(touchListener);
+        }else if(!usingTextureView && mGLSurfaceView != null){
+            mGLSurfaceView.setOnTouchListener(touchListener);
         }
     }
 
@@ -506,15 +525,89 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     public void onResume() {
         super.onResume();
         startBackgroundThread();
+        setSurfaceType();
+    }
 
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-        // a camera and start preview from here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
-        if (mTextureView.isAvailable()) {
-            openCamera(mTextureView.getWidth(), mTextureView.getHeight());
-        } else {
-            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+    private void setSurfaceType(){
+        final ConstraintLayout container = getActivity().findViewById(R.id.fragment_container);
+        boolean switchingSurfaces = false;
+        if(usingTextureView) {
+            if(mGLSurfaceView != null){
+                switchingSurfaces = true;
+                closeCamera();
+                container.removeView(mGLSurfaceView);
+                mGLSurfaceView = null;
+            }
+            mBackgroundHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if(mTextureView == null){
+                                ConstraintLayout.LayoutParams params = new ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                                params.leftToLeft = container.getId();
+                                params.rightToRight = container.getId();
+                                params.topToTop = container.getId();
+                                params.bottomToBottom = container.getId();
+                                mTextureView = new AutoFitTextureView(getActivity());
+                                mTextureView.setLayoutParams(params);
+                                container.addView(mTextureView, 0);
+                            }
+                            // When the screen is turned off and turned back on, the SurfaceTexture is already
+                            // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
+                            // a camera and start preview from here (otherwise, we wait until the surface is ready in
+                            // the SurfaceTextureListener).
+                            if (mTextureView.isAvailable()) {
+                                openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+                            } else {
+                                mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+                            }
+                            setListeners();
+                        }
+                    });
+                }
+            }, switchingSurfaces ? 1000 : 0);
+        }else{
+            if(mTextureView != null){
+                switchingSurfaces = true;
+                closeCamera();
+                container.removeView(mTextureView);
+                mTextureView = null;
+            }
+            mBackgroundHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if(mGLSurfaceView == null){
+                                ConstraintLayout.LayoutParams params = new ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                                params.leftToLeft = container.getId();
+                                params.rightToRight = container.getId();
+                                params.topToTop = container.getId();
+                                params.bottomToBottom = container.getId();
+                                mGLSurfaceView = new AutoFitGLSurfaceView(getActivity());
+                                mGLSurfaceView.setLayoutParams(params);
+                                container.addView(mGLSurfaceView, 0);
+                                // Todo Add renderer
+                            }
+
+                            // Todo
+                            // When the screen is turned off and turned back on, the SurfaceTexture is already
+                            // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
+                            // a camera and start preview from here (otherwise, we wait until the surface is ready in
+                            // the SurfaceTextureListener).
+//                            if (mTextureView.isAvailable()) {
+//                                openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+//                            } else {
+//                                mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+//                            }
+                            setListeners();
+                        }
+                    });
+                }
+            }, switchingSurfaces ? 1000 : 0);
         }
     }
 
@@ -618,9 +711,18 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 int orientation = getResources().getConfiguration().orientation;
-                if (orientation == Configuration.ORIENTATION_LANDSCAPE) mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                else mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-
+                if(mTextureView != null) {
+                    if (orientation == Configuration.ORIENTATION_LANDSCAPE)
+                        mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    else
+                        mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                }
+                if(mGLSurfaceView != null){
+                    if (orientation == Configuration.ORIENTATION_LANDSCAPE)
+                        mGLSurfaceView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    else
+                        mGLSurfaceView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                }
                 mCameraId = cameraId;
                 return;
             }
@@ -645,7 +747,8 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
         }
 
         setUpCameraOutputs(width, height);
-        configureTransform(width, height);
+        // Todo configure transform for GL View
+        if(usingTextureView) configureTransform(width, height);
         Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -707,9 +810,10 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     /**
      * Creates a new {@link CameraCaptureSession} for camera preview.
      */
-    private void createCameraPreviewSession() {
+    private void createCameraPreviewSession(SurfaceTexture surfaceTexture) {
         try {
-            SurfaceTexture texture = mTextureView.getSurfaceTexture();
+
+            SurfaceTexture texture = usingTextureView ? mTextureView.getSurfaceTexture() : surfaceTexture;
             assert texture != null;
 
             // We configure the size of default buffer to be the size of camera preview we want.

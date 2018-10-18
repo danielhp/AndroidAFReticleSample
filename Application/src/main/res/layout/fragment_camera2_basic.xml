@@ -14,18 +14,20 @@
  limitations under the License.
 -->
 <android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fragment_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <com.example.android.camera2basic.AutoFitTextureView
-        android:id="@+id/texture"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"/>
+    <!--<com.example.android.camera2basic.AutoFitTextureView-->
+        <!--android:id="@+id/texture"-->
+        <!--android:layout_width="wrap_content"-->
+        <!--android:layout_height="wrap_content"-->
+        <!--app:layout_constraintTop_toTopOf="parent"-->
+        <!--app:layout_constraintBottom_toBottomOf="parent"-->
+        <!--app:layout_constraintRight_toRightOf="parent"-->
+        <!--app:layout_constraintLeft_toLeftOf="parent"-->
+        <!--android:elevation="0dp"/>-->
 
     <ImageView
         android:id="@+id/focus_reticle"
@@ -49,9 +51,10 @@
         android:textColor="@android:color/white"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toRightOf="@+id/switch_focus_mode"
-        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintRight_toLeftOf="@+id/switch_surface_type"
         android:padding="2dp"
-        android:layout_marginBottom="10dp"/>
+        android:layout_marginBottom="10dp"
+        android:elevation="1dp"/>
 
     <Switch
         android:id="@+id/switch_focus_mode"
@@ -65,7 +68,23 @@
         android:padding="2dp"
         android:layout_marginBottom="10dp"
         android:layout_marginRight="10dp"
-        android:checked="true"/>
+        android:checked="true"
+        android:elevation="1dp"/>
+
+    <Switch
+        android:id="@+id/switch_surface_type"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Use GLSurface"
+        android:textColor="@android:color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintLeft_toRightOf="@+id/switch_continuous_focus_mode"
+        android:padding="2dp"
+        android:layout_marginBottom="10dp"
+        android:layout_marginLeft="10dp"
+        android:checked="false"
+        android:elevation="1dp"/>
 
 
 </android.support.constraint.ConstraintLayout>

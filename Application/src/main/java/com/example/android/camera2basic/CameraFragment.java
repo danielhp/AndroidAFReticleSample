@@ -73,7 +73,7 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnRequestPermissionsResultCallback {
+public class CameraFragment extends Fragment implements ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
      * Conversion from screen rotation to JPEG orientation.
@@ -227,9 +227,13 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
 
     private boolean usingContinuousAF = false;
 
-    private boolean usingReticle = true;
-
     private boolean usingTextureView = true;
+
+    /**
+     * Our custom renderer for this example, which extends {@link CameraRenderer} and then adds custom
+     * shaders, which turns shit green, which is easy.
+     */
+    private CameraRenderer mRenderer;
 
     /**
      * This is the scalar range that we can actually use with the reticle. We avoid the borders so the rectangle we send is always the same size.
@@ -315,8 +319,8 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
         }
     }
 
-    public static Camera2BasicFragment newInstance() {
-        return new Camera2BasicFragment();
+    public static CameraFragment newInstance() {
+        return new CameraFragment();
     }
 
     @Override
@@ -355,20 +359,6 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 usingTextureView = !isChecked;
                 setSurfaceType();
-            }
-        });
-
-        ((Switch)view.findViewById(R.id.switch_focus_mode)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                usingReticle = isChecked;
-                mReticleView.setVisibility(isChecked? View.VISIBLE: View.GONE);
-                mBackgroundHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        // ToDo change camera stuff
-                    }
-                });
             }
         });
 
@@ -531,7 +521,8 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     private void setSurfaceType(){
         final ConstraintLayout container = getActivity().findViewById(R.id.fragment_container);
         boolean switchingSurfaces = false;
-        if(usingTextureView) {
+
+        if (usingTextureView) {
             if(mGLSurfaceView != null){
                 switchingSurfaces = true;
                 closeCamera();
@@ -568,7 +559,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
                     });
                 }
             }, switchingSurfaces ? 1000 : 0);
-        }else{
+        } else {
             if(mTextureView != null){
                 switchingSurfaces = true;
                 closeCamera();
@@ -581,7 +572,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if(mGLSurfaceView == null){
+                            if(mGLSurfaceView == null) {
                                 ConstraintLayout.LayoutParams params = new ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                                 params.leftToLeft = container.getId();
                                 params.rightToRight = container.getId();
@@ -590,6 +581,9 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
                                 mGLSurfaceView = new AutoFitGLSurfaceView(getActivity());
                                 mGLSurfaceView.setLayoutParams(params);
                                 container.addView(mGLSurfaceView, 0);
+
+                                mGLSurfaceView.setEGLContextClientVersion(3);
+
                                 // Todo Add renderer
                             }
 
@@ -598,17 +592,32 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
                             // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
                             // a camera and start preview from here (otherwise, we wait until the surface is ready in
                             // the SurfaceTextureListener).
-//                            if (mTextureView.isAvailable()) {
-//                                openCamera(mTextureView.getWidth(), mTextureView.getHeight());
-//                            } else {
-//                                mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
-//                            }
+                            /*if (mGLSurfaceView.isAvailable()) {
+                                openCamera(mGLSurfaceView.getWidth(), mGLSurfaceView.getHeight());
+                            } else {
+                                mGLSurfaceView.set.setSurfaceTextureListener(mSurfaceTextureListener);
+                            }*/
                             setListeners();
                         }
                     });
                 }
             }, switchingSurfaces ? 1000 : 0);
         }
+    }
+
+    /**
+     * called whenever surface texture becomes initially available or whenever a camera restarts after
+     * completed recording or resuming from onpause
+     * @param surface {@link SurfaceTexture} that we'll be drawing into
+     * @param width width of the surface texture
+     * @param height height of the surface texture
+     */
+    protected void setReady(SurfaceTexture surface, int width, int height) {
+        mRenderer = new CameraRenderer(this.getActivity(), surface, width, height);
+        mRenderer.start();
+
+        // initial config if needed
+        configureTransform(width, height);
     }
 
     @Override
@@ -737,7 +746,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
     }
 
     /**
-     * Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
+     * Opens the camera specified by {@link CameraFragment#mCameraId}.
      */
     private void openCamera(int width, int height) {
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
@@ -892,6 +901,7 @@ public class Camera2BasicFragment extends Fragment implements ActivityCompat.OnR
         }
         mTextureView.setTransform(matrix);
     }
+
 
     /**
      * Compares two {@code Size}s based on their areas.

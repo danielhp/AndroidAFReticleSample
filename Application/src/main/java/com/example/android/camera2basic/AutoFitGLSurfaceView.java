@@ -4,9 +4,6 @@ import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.util.AttributeSet;
 
-/**
- * Created by Esteban Rodriguez on 18/10/2018.
- */
 public class AutoFitGLSurfaceView extends GLSurfaceView {
 
     private int mRatioWidth = 0;

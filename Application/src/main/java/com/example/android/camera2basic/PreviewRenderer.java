@@ -6,7 +6,6 @@ import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.support.annotation.NonNull;
-import android.util.Log;
 
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
@@ -14,12 +13,9 @@ import java.nio.ShortBuffer;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/**
- * Created by Esteban Rodriguez on 23/10/2018.
- */
 public class PreviewRenderer implements GLSurfaceView.Renderer {
 
-    private static final String TAG = PreviewRenderer.class.getSimpleName();
+//    private static final String TAG = PreviewRenderer.class.getSimpleName();
 
     /**
      * Texture created for GLES rendering of camera data
@@ -100,6 +96,7 @@ public class PreviewRenderer implements GLSurfaceView.Renderer {
 
     private int orientation = 270;
     private boolean verticalFlip = true;
+    private boolean rendering = true;
 
     interface SurfaceListener{
         void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture);
@@ -118,7 +115,7 @@ public class PreviewRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        Log.i(TAG, "onSurfaceCreated: " + mViewportWidth + "x" + mViewportHeight);
+//        Log.i(TAG, "onSurfaceCreated: " + mViewportWidth + "x" + mViewportHeight);
         mCameraTextureID = GLUtil.createExternal2DTexture();
         mPreviewTexture = new SurfaceTexture(mCameraTextureID);
 //        mPreviewTexture.setDefaultBufferSize(mViewportWidth, mViewportHeight);
@@ -149,7 +146,7 @@ public class PreviewRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
-        Log.i(TAG, "onSurfaceChanged: " + width + "x" + height);
+//        Log.i(TAG, "onSurfaceChanged: " + width + "x" + height);
         mViewportWidth = width;
         mViewportHeight = height;
         mPreviewTexture.setDefaultBufferSize(mViewportWidth, mViewportHeight);
@@ -159,7 +156,8 @@ public class PreviewRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        Log.i(TAG, "onDrawFrame: ");
+//        Log.i(TAG, "onDrawFrame: ");
+        if(!rendering) return;
         mPreviewTexture.updateTexImage();
         mPreviewTexture.getTransformMatrix(mCameraTransformMatrix);
         if (orientation == 90 || orientation == 270) {
@@ -206,5 +204,9 @@ public class PreviewRenderer implements GLSurfaceView.Renderer {
 
         // GL is a state machine and some say that it's better to unbind the texture.
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
+    }
+
+    public void stopRendering(){
+        rendering = false;
     }
 }

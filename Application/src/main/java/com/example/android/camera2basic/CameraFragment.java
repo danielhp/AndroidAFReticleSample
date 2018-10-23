@@ -218,14 +218,11 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
      */
     private CaptureRequest mPreviewRequest;
 
-
     /**
      * A {@link Semaphore} to prevent the app from exiting before closing the camera.
      */
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
-
-    private int mSensorOrientation;
     private Rect activeArraySize = null;
 
     private boolean usingContinuousAF = false;
@@ -327,12 +324,12 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_camera, container, false);
     }
 
     @Override
-    public void onViewCreated(final View view, Bundle savedInstanceState) {
+    public void onViewCreated(@NonNull final View view, Bundle savedInstanceState) {
         ((Switch)view.findViewById(R.id.switch_continuous_focus_mode)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -360,8 +357,10 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
         ((Switch)view.findViewById(R.id.switch_surface_type)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                // If nothing has changed, we ignore this call
+                if(usingTextureView == !isChecked) return;
                 usingTextureView = !isChecked;
-                setSurfaceType();
+                if(mBackgroundHandler != null) setSurfaceType();
             }
         });
 
@@ -377,8 +376,8 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
     private void setListeners(){
         if( (usingTextureView && mTextureView == null) ||(!usingTextureView && mGLSurfaceView == null)) return;
 
-        final float initX = usingTextureView ? mTextureView.getX() : mGLSurfaceView.getX();
-        final float initY = usingTextureView ? mTextureView.getY() : mGLSurfaceView.getY();
+//        final float initX = usingTextureView ? mTextureView.getX() : mGLSurfaceView.getX();
+//        final float initY = usingTextureView ? mTextureView.getY() : mGLSurfaceView.getY();
         final GestureDetector gestureDetector = new GestureDetector(new GestureDetector.OnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
@@ -435,6 +434,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                             x = 1 - x;
                             y = 1 - y;
                             break;
+                        default:
                     }
 
                     // we assume the device supports at least one metering area.
@@ -526,9 +526,10 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
     private void setSurfaceType(){
         final ConstraintLayout container = getActivity().findViewById(R.id.fragment_container);
         boolean switchingSurfaces = false;
-
         if (usingTextureView) {
             if(mGLSurfaceView != null){
+                mRenderer.stopRendering();
+                mGLSurfaceView.onPause();
                 switchingSurfaces = true;
                 closeCamera();
                 container.removeView(mGLSurfaceView);
@@ -590,7 +591,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                                 mRenderer = new PreviewRenderer(new SurfaceTexture.OnFrameAvailableListener() {
                                     @Override
                                     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                                        mGLSurfaceView.requestRender();
+                                        if(mGLSurfaceView != null) mGLSurfaceView.requestRender();
                                     }
                                 }, mGLSurfaceView.getWidth(), mGLSurfaceView.getHeight(), new PreviewRenderer.SurfaceListener() {
                                     @Override
@@ -602,22 +603,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
 
                                 mGLSurfaceView.setEGLContextClientVersion(3);
                                 mGLSurfaceView.setRenderer(mRenderer);
-//                                mGLSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-
-
-                                // Todo Add renderer
                             }
-
-                            // Todo
-                            // When the screen is turned off and turned back on, the SurfaceTexture is already
-                            // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-                            // a camera and start preview from here (otherwise, we wait until the surface is ready in
-                            // the SurfaceTextureListener).
-                            /*if (mGLSurfaceView.isAvailable()) {
-                                openCamera(mGLSurfaceView.getWidth(), mGLSurfaceView.getHeight());
-                            } else {
-                                mGLSurfaceView.set.setSurfaceTextureListener(mSurfaceTextureListener);
-                            }*/
                             setListeners();
                         }
                     });
@@ -626,24 +612,9 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
         }
     }
 
-    /**
-     * called whenever surface texture becomes initially available or whenever a camera restarts after
-     * completed recording or resuming from onpause
-     * @param surface {@link SurfaceTexture} that we'll be drawing into
-     * @param width width of the surface texture
-     * @param height height of the surface texture
-     */
-    protected void setReady(SurfaceTexture surface, int width, int height) {
-//        mRenderer = new CameraRenderer(this.getActivity(), surface, width, height);
-//        mRenderer.start();
-
-        // initial config if needed
-        configureTransform(width, height);
-        if(mGLSurfaceView != null) mGLSurfaceView.setRenderer(mRenderer);
-    }
-
     @Override
     public void onPause() {
+        if(mGLSurfaceView != null) mGLSurfaceView.onPause();
         closeCamera();
         stopBackgroundThread();
         super.onPause();
@@ -697,18 +668,18 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                 // coordinate.
                 final int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
                 //noinspection ConstantConditions
-                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                int sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
                 boolean swappedDimensions = false;
                 switch (displayRotation) {
                     case Surface.ROTATION_0:
                     case Surface.ROTATION_180:
-                        if (mSensorOrientation == 90 || mSensorOrientation == 270) {
+                        if (sensorOrientation == 90 || sensorOrientation == 270) {
                             swappedDimensions = true;
                         }
                         break;
                     case Surface.ROTATION_90:
                     case Surface.ROTATION_270:
-                        if (mSensorOrientation == 0 || mSensorOrientation == 180) {
+                        if (sensorOrientation == 0 || sensorOrientation == 180) {
                             swappedDimensions = true;
                         }
                         break;
@@ -756,7 +727,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                                 mGLSurfaceView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                             else
                                 mGLSurfaceView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-                            mRenderer.setVerticalFlip(displayRotation == Surface.ROTATION_270 || displayRotation == Surface.ROTATION_90);
+                            mRenderer.setVerticalFlip(displayRotation == Surface.ROTATION_270);
                             switch (displayRotation) {
                                 case Surface.ROTATION_0:
                                     mRenderer.setOrientation(0);
@@ -765,8 +736,6 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                                     mRenderer.setOrientation(180);
                                     break;
                                 case Surface.ROTATION_90:
-                                    mRenderer.setOrientation(90);
-                                    break;
                                 case Surface.ROTATION_270:
                                     mRenderer.setOrientation(270);
                                     break;
@@ -800,7 +769,6 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
         }
 
         setUpCameraOutputs(width, height);
-        // Todo configure transform for GL View
         if(usingTextureView) configureTransform(width, height);
         Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
@@ -1024,5 +992,4 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                     .create();
         }
     }
-
 }

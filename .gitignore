@@ -3,3 +3,4 @@ Application/build/
 .gradle/
 local.properties
 CONTRIB.md
+*.iml

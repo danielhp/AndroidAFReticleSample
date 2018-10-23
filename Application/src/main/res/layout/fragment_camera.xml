@@ -30,7 +30,7 @@
         android:padding="2dp"
         android:layout_marginBottom="10dp"
         android:layout_marginRight="10dp"
-        android:checked="true"
+        android:checked="false"
         android:elevation="1dp"/>
     <Switch
         android:id="@+id/switch_surface_type"

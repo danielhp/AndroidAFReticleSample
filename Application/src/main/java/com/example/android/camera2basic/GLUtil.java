@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package com.example.android.camera2basic.gl;
+package com.example.android.camera2basic;
 
-import android.graphics.Bitmap;
+import android.opengl.GLES11Ext;
 import android.opengl.GLES30;
-import android.opengl.GLUtils;
 import android.opengl.Matrix;
 import android.util.Log;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -143,5 +141,23 @@ public class GLUtil {
         sb.put(coords);
         sb.position(0);
         return sb;
+    }
+
+    /**
+     * Creates a texture object suitable for use with drawFrame().
+     */
+    public static int createExternal2DTexture() {
+        int[] textures = new int[1];
+        GLES30.glGenTextures(1, textures, 0);
+
+        int texId = textures[0];
+        GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texId);
+
+        GLES30.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST);
+        GLES30.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST); //GL_LINEAR?
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+
+        return texId;
     }
 }

@@ -112,7 +112,8 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            openCamera(width, height);
+            if(usingTextureView) openCamera(width, height);
+//            else setReady(texture, width, height);
         }
 
         @Override
@@ -161,6 +162,8 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
      */
     private Size mPreviewSize;
 
+    private SurfaceTexture mGLSurfaceTexture;
+
     /**
      * {@link CameraDevice.StateCallback} is called when {@link CameraDevice} changes its state.
      */
@@ -171,7 +174,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
             // This method is called when the camera is opened.  We start camera preview here.
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
-            createCameraPreviewSession(null);
+            createCameraPreviewSession();
         }
 
         @Override
@@ -230,10 +233,10 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
     private boolean usingTextureView = true;
 
     /**
-     * Our custom renderer for this example, which extends {@link CameraRenderer} and then adds custom
+     * Our custom renderer for this example, which extends {@link PreviewRenderer} and then adds custom
      * shaders, which turns shit green, which is easy.
      */
-    private CameraRenderer mRenderer;
+    private PreviewRenderer mRenderer;
 
     /**
      * This is the scalar range that we can actually use with the reticle. We avoid the borders so the rectangle we send is always the same size.
@@ -325,7 +328,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
+        return inflater.inflate(R.layout.fragment_camera, container, false);
     }
 
     @Override
@@ -388,16 +391,18 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
             @Override
             public boolean onSingleTapUp(MotionEvent e) {
                 int halfWidth = mReticleView.getWidth() / 2;
-                mReticleView.setX(mTextureView.getX() + e.getX() - halfWidth);
-                mReticleView.setY(mTextureView.getY() + e.getY() - halfWidth);
+                View surface = usingTextureView ? mTextureView : mGLSurfaceView;
+                mReticleView.setX(surface.getX() + e.getX() - halfWidth);
+                mReticleView.setY(surface.getY() + e.getY() - halfWidth);
                 return true;
             }
 
             @Override
             public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
                 int halfWidth = mReticleView.getWidth() / 2;
-                mReticleView.setX(mTextureView.getX() + e2.getX() - halfWidth);
-                mReticleView.setY(mTextureView.getY() + e2.getY() - halfWidth);
+                View surface = usingTextureView ? mTextureView : mGLSurfaceView;
+                mReticleView.setX(surface.getX() + e2.getX() - halfWidth);
+                mReticleView.setY(surface.getY() + e2.getY() - halfWidth);
                 return true;
             }
 
@@ -582,7 +587,23 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                                 mGLSurfaceView.setLayoutParams(params);
                                 container.addView(mGLSurfaceView, 0);
 
+                                mRenderer = new PreviewRenderer(new SurfaceTexture.OnFrameAvailableListener() {
+                                    @Override
+                                    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+                                        mGLSurfaceView.requestRender();
+                                    }
+                                }, mGLSurfaceView.getWidth(), mGLSurfaceView.getHeight(), new PreviewRenderer.SurfaceListener() {
+                                    @Override
+                                    public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture) {
+                                        mGLSurfaceTexture = surfaceTexture;
+                                        openCamera(mGLSurfaceView.getWidth(), mGLSurfaceView.getHeight());
+                                    }
+                                });
+
                                 mGLSurfaceView.setEGLContextClientVersion(3);
+                                mGLSurfaceView.setRenderer(mRenderer);
+//                                mGLSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+
 
                                 // Todo Add renderer
                             }
@@ -613,11 +634,12 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
      * @param height height of the surface texture
      */
     protected void setReady(SurfaceTexture surface, int width, int height) {
-        mRenderer = new CameraRenderer(this.getActivity(), surface, width, height);
-        mRenderer.start();
+//        mRenderer = new CameraRenderer(this.getActivity(), surface, width, height);
+//        mRenderer.start();
 
         // initial config if needed
         configureTransform(width, height);
+        if(mGLSurfaceView != null) mGLSurfaceView.setRenderer(mRenderer);
     }
 
     @Override
@@ -656,7 +678,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
      */
     @SuppressWarnings("SuspiciousNameCombination")
     private void setUpCameraOutputs(int width, int height) {
-        Activity activity = getActivity();
+        final Activity activity = getActivity();
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
@@ -673,7 +695,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
                 // coordinate.
-                int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
+                final int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
                 //noinspection ConstantConditions
                 mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
                 boolean swappedDimensions = false;
@@ -719,7 +741,7 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                         maxPreviewHeight, new Size(16,9));
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
-                int orientation = getResources().getConfiguration().orientation;
+                final int orientation = getResources().getConfiguration().orientation;
                 if(mTextureView != null) {
                     if (orientation == Configuration.ORIENTATION_LANDSCAPE)
                         mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -727,10 +749,32 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
                         mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
                 }
                 if(mGLSurfaceView != null){
-                    if (orientation == Configuration.ORIENTATION_LANDSCAPE)
-                        mGLSurfaceView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                    else
-                        mGLSurfaceView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                    activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (orientation == Configuration.ORIENTATION_LANDSCAPE)
+                                mGLSurfaceView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                            else
+                                mGLSurfaceView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+                            mRenderer.setVerticalFlip(displayRotation == Surface.ROTATION_270 || displayRotation == Surface.ROTATION_90);
+                            switch (displayRotation) {
+                                case Surface.ROTATION_0:
+                                    mRenderer.setOrientation(0);
+                                    break;
+                                case Surface.ROTATION_180:
+                                    mRenderer.setOrientation(180);
+                                    break;
+                                case Surface.ROTATION_90:
+                                    mRenderer.setOrientation(90);
+                                    break;
+                                case Surface.ROTATION_270:
+                                    mRenderer.setOrientation(270);
+                                    break;
+                                default:
+                                    Log.e(TAG, "Display rotation is invalid: " + displayRotation);
+                            }
+                        }
+                    });
                 }
                 mCameraId = cameraId;
                 return;
@@ -819,10 +863,10 @@ public class CameraFragment extends Fragment implements ActivityCompat.OnRequest
     /**
      * Creates a new {@link CameraCaptureSession} for camera preview.
      */
-    private void createCameraPreviewSession(SurfaceTexture surfaceTexture) {
+    private void createCameraPreviewSession() {
         try {
 
-            SurfaceTexture texture = usingTextureView ? mTextureView.getSurfaceTexture() : surfaceTexture;
+            SurfaceTexture texture = usingTextureView ? mTextureView.getSurfaceTexture() : mGLSurfaceTexture;
             assert texture != null;
 
             // We configure the size of default buffer to be the size of camera preview we want.

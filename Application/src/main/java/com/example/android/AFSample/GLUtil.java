@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.example.android.camera2basic;
+package com.example.android.AFSample;
 
 import android.opengl.GLES11Ext;
 import android.opengl.GLES30;

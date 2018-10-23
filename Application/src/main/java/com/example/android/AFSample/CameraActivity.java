@@ -1,4 +1,4 @@
-package com.example.android.camera2basic;
+package com.example.android.AFSample;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;

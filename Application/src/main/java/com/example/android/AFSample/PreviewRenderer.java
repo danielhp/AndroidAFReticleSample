@@ -1,4 +1,4 @@
-package com.example.android.camera2basic;
+package com.example.android.AFSample;
 
 import android.graphics.SurfaceTexture;
 import android.opengl.GLES11Ext;
